@@ -1,0 +1,475 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+	
+	<title>VertexCover ! Oh my god !</title>
+
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.1/dist/leaflet.css" />
+	<link rel="stylesheet" href="index.css" />
+	<script src="https://unpkg.com/leaflet@1.0.1/dist/leaflet.js"></script>
+
+
+	
+</head>
+
+<script>
+
+var opacity = 0.6;
+var radius = 2400;
+var allText;
+var coordText;
+var graphText;
+var vertexCover;
+var nodes = [];
+var circles = [];
+var l_vertex = [];
+var result = [];
+
+/*
+ *
+ * Create and size the map
+ *
+ */
+function createMap(coordX, coordY, zoom){
+
+	var mymap = L.map('mapid').setView([coordX, coordY], zoom);
+
+	L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpandmbXliNDBjZWd2M2x6bDk3c2ZtOTkifQ._QA7i5Mpkd_m30IGElHziw', {
+		maxZoom: 18,
+		attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, ' +
+			'<a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+			'Imagery © <a href="http://mapbox.com">Mapbox</a>',
+		id: 'mapbox.streets'
+	}).addTo(mymap);
+
+	return mymap;
+
+}
+
+/*
+ *
+ * Add a circle on the map
+ *
+ */
+function addCircle(mymap, coordX, coordY, opacity, radius, color, fillColor){
+
+	var circle = L.circle([coordX, coordY], {
+	    color: color,
+	    fillColor: fillColor,
+	    fillOpacity: opacity,
+	    radius: radius
+	}).addTo(mymap);
+
+	return circle;
+
+}
+
+/*
+ *
+ * Add a pop up to a circle
+ *
+ */
+function addTextCircle(circle, str){
+
+	circle.bindPopup(str);
+
+}
+
+/*
+ *
+ * Add a line on the map (to connect to circles)
+ *
+ */
+function addLine(mymap, fromX, fromY, toX, toY, color){
+
+	var latlngs = [
+	    [fromX, fromY],
+	    [toX, toY],
+	];
+	var polyline = L.polyline(latlngs, {color: color}).addTo(mymap);
+
+}
+
+/*
+ *
+ * open and read a file
+ *
+ */
+function readTextFile(file){
+
+	var rawFile = new XMLHttpRequest();
+	rawFile.open("GET", file, false);
+
+	rawFile.onreadystatechange = function (){
+
+		if(rawFile.readyState === 4){
+
+			if(rawFile.status === 200 || rawFile.status == 0){
+
+				allText = rawFile.responseText;
+			}
+		}
+	}
+
+	rawFile.send(null);
+
+}
+
+/*
+ *
+ * create all circles with the coord text
+ *
+ */
+function createCircles(mymap, circles, color){
+
+	var i = 0;
+	line = coordText.split('\n');
+
+	while(line[i] && line[i] != ""){
+
+		element = line[i].split(" ");
+		circles.push(addCircle(mymap, element[1], element[2], opacity, radius*4, color, '#ccc'))
+		addTextCircle(circles[i], "Sommet " + i + " : Good");
+		i++;
+
+	}
+
+	return circles;
+
+}
+
+/*
+ *
+ * get the number of vertice
+ *
+ */
+function get_mat_size(Text){
+
+	mat_size = Text.split('\n')[0]
+
+}
+	
+/*
+ *
+ * create a node with neighboor
+ *
+ */
+function create_nodes(Text,mat_size){
+
+	line = Text.split('\n');
+	line = line.slice(1,line.length);
+
+	for (var i = 0; i< mat_size; i++){
+
+		element = line[i].split(" ");
+		var neighboor = [];
+
+		for (var j = 0; j< element.length; j++){
+				
+			if (element[j] == "1"){
+
+				neighboor.push(j+1);
+			}
+
+		}
+		l_vertex.push(i + 1);
+		nodes.push({
+
+			id: i+1,
+			neighboor: neighboor,
+			poid: 1
+
+		});
+	}
+
+}
+
+/*
+ *
+ * make the link between conneted circles
+ *
+ */
+function linkNeighboor(mymap, nodes, coordText){
+
+	var i = 0;
+	line = coordText.split('\n');
+	while(nodes[i]){
+
+		var j = 0;
+		element = line[i].split(" ");
+		while(nodes[i].neighboor[j]){
+
+			addLine(mymap, element[1], element[2], line[nodes[i].neighboor[j] - 1].split(" ")[1], line[nodes[i].neighboor[j] - 1].split(" ")[2], '#777');
+			j++;
+		
+		}
+
+		i++;
+
+	}
+
+}
+
+/*
+ *
+ * fonction retournant l'id du noeud removables contenant le plus de sous noeud removables
+ *
+ */
+function get_highest(p_array){
+
+	var temp_id=p_array[0]["id"];
+	var temp_length = p_array[0]["length"];
+
+	for (var i = 1;i<p_array.length; i++){
+
+		if (p_array[i]["length"] > temp_length){
+
+			temp_length = p_array[i]["length"];
+			temp_id = p_array[i]["id"];
+
+		}
+
+	}
+
+	return temp_id;
+
+}
+ 
+ 
+/*
+ *
+ * fonction principale de l'algorithme du vertex cover
+ *
+ */
+function get_k(r_nodes, vertex){
+
+	var r = []
+	var temp_node = r_nodes.slice();
+	while (temp_node.length >= 1){
+
+		var size_p = [];
+		for (var item = 0 ; item < r_nodes.length ; item++){
+
+			temp_node = r_nodes.slice();
+			r = temp_node.splice(item,1);
+			var n = r[0]["neighboor"];
+			for (var j = 0 ; j<n.length ; j++){
+
+				for (k = 0 ; k < temp_node.length ; k++){
+
+					if (temp_node[k]["id"] == n[j]){
+
+						temp_node.splice(k,1);
+						break;	
+
+					}
+				}
+			}
+
+			size_p.push({id: r_nodes[item]["id"],
+			length: temp_node.length});
+
+		}
+
+		var c = get_highest(size_p);
+		var r_n = []
+
+		for (var i = 0; i<r_nodes.length;i++){
+
+			if (r_nodes[i]["id"] == c){
+
+					r_n = r_nodes.splice(i,1);
+					break;
+
+				}
+			}
+
+			var n = r_n[0]["neighboor"];
+			for (var j = 0; j<n.length; j++){
+
+				for (k = 0; k < r_nodes.length; k++){
+
+					if (r_nodes[k]["id"] == n[j]){
+
+						r_nodes.splice(k,1);
+						break;
+
+					}
+				}
+			}
+
+		vertex.splice(vertex.indexOf(c),1);
+
+	}
+
+	return vertex;
+
+}
+	
+/*
+ *
+ * fonction principale de l'algorithme du vertex cover
+ *
+ */
+function vertex_cover(nodes){
+
+	size_vertex = l_vertex.length;
+	var vertex_final;
+
+	for (var i = 0; i < nodes.length ; i++){
+
+		var l_vertex_temp = l_vertex.slice();
+
+		l_vertex_temp.splice(i, 1);
+
+		if (result.length < nodes.length -1){
+
+			var removables = nodes.slice();
+			var removed_node = removables.splice(i, 1);
+			var n = removed_node[0]["neighboor"];
+
+			if (n.length == nodes.length - 1){
+
+				result.push(i + 1);
+
+				if(result.length == k){
+
+					l_vertex = result;
+					break;
+
+				}
+			}
+			else{
+
+				for (var j = 0 ; j < n.length ; j++)
+				{
+					for (l = 0 ; l < removables.length ; l++)
+					{
+						if (removables[l]["id"] == n[j]){
+
+							removables.splice(l, 1);
+							break;
+
+						}
+					}
+				}
+
+				l_vertex_temp = get_k(removables,l_vertex_temp);
+
+			}
+		}	
+		if (l_vertex_temp.length < size_vertex){
+
+			size_vertex = l_vertex_temp.length;
+			vertex_final = l_vertex_temp;
+
+		}
+	}
+
+	l_vertex = vertex_final;
+
+}
+
+/*
+ *
+ * draw the vertec cover on the map
+ *
+ */
+function drawVertex(mymap, tab, circles){
+
+	var i = 0;
+	line = coordText.split('\n');
+
+	circles = [];
+
+	while(line[i] && line[i] != ""){
+
+		element = line[i].split(" ");
+		if(isIInTab(i, tab))
+			circles.push(addCircle(mymap, element[1], element[2], opacity, radius*4, 'red', '#ccc'))
+		else
+			circles.push(addCircle(mymap, element[1], element[2], opacity, radius*4, 'green', '#ccc'))
+		addTextCircle(circles[i], "Sommet " + i + " : Good");
+		i++;
+
+	}
+
+	return circles;
+
+}
+
+/*
+ *
+ * return true if i is in tab, false else
+ *
+ */
+function isIInTab(i, tab){
+
+	var j = 0;
+	while(tab[j]){
+
+		if(tab[j]-1 == i){
+
+			return true;
+
+		}
+
+		j++;
+
+	}
+
+	return false;
+
+}
+
+/*
+ *
+ * click on "Apply vertex cover"
+ *
+ */
+function Apply(mymap, nodes, circles){
+
+	vertex_cover(nodes);
+
+	mymap.remove();
+	mymap = createMap(47.0, 2.7, 6.0);
+	
+	circles = drawVertex(mymap, l_vertex, circles);
+
+	linkNeighboor(mymap, nodes, coordText);
+
+}
+
+</script>
+<body>
+
+<div id="mapid" style="position: absolute; width: 99%; height: 93%; left: 0; right: 0; top: 75px"></div>
+
+<button onclick="Apply(mymap, nodes, circles)" class="btnred" type="button">Apply the vertex cover</button>
+
+<script>
+
+	var mymap = createMap(47.0, 2.7, 6.0);
+
+	readTextFile("http://93.22.203.21/VertexCover/graphCoord.txt");
+	coordText = allText;
+	circles = createCircles(mymap, circles, 'green');
+
+	readTextFile("http://93.22.203.21/VertexCover/graph.txt");
+	graphText = allText;
+
+	get_mat_size(graphText);
+	create_nodes(graphText, mat_size);
+
+	linkNeighboor(mymap, nodes, coordText);
+
+</script>
+
+
+
+</body>
+</html>
